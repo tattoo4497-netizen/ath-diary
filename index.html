@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>ATH株 日めくり記録帳</title>
+    <style>
+        * { box-sizing: border-box; touch-action: manipulation; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #0f111a;
+            color: #e1e3ea;
+            margin: 0;
+            padding: 12px;
+            user-select: none;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        h1 { font-size: 1.1rem; margin: 0; color: #fff; }
+        
+        /* 日めくりナビゲーション */
+        .date-card {
+            background: #1a1d2e;
+            border-radius: 12px;
+            padding: 10px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            margin-bottom: 12px;
+            border: 1px solid #2a2e45;
+        }
+        .nav-btn {
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        .nav-btn:active { background: #1d4ed8; }
+        .date-display {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #38bdf8;
+            text-align: center;
+            cursor: pointer;
+        }
+        .date-subtext {
+            font-size: 0.75rem;
+            color: #8a8d9b;
+            text-align: center;
+        }
+
+        /* 銘柄リストコンテナ */
+        .page-container {
+            min-height: 50vh;
+        }
+        .table-container {
+            overflow-x: auto;
+            background: #1a1d2e;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            border: 1px solid #25283b;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            text-align: left;
+        }
+        th, td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #25283b;
+            white-space: nowrap;
+        }
+        th { background-color: #222638; color: #9da1b0; }
+        .badge {
+            background: #2563eb;
+            color: #fff;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+        }
+        .up { color: #22c55e; }
+        .down { color: #ef4444; }
+        .swipe-hint {
+            text-align: center;
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>📖 ATH 日めくり記録帳</h1>
+        <button class="nav-btn" onclick="loadToday()">今日</button>
+    </div>
+
+    <!-- 日付めくりナビゲーション -->
+    <div class="date-card">
+        <button class="nav-btn" onclick="changeDate(-1)">◀ 前日</button>
+        <div>
+            <div class="date-display" id="dateDisplay" onclick="document.getElementById('dateInput').click()">----/--/--</div>
+            <div class="date-subtext" id="summaryText">読み込み中...</div>
+            <input type="date" id="dateInput" style="display:none;" onchange="onDateSelected(this.value)">
+        </div>
+        <button class="nav-btn" onclick="changeDate(1)">翌日 ▶</button>
+    </div>
+
+    <!-- メイン表示エリア（スワイプ対応） -->
+    <div class="page-container" id="pageContainer">
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>コード</th>
+                        <th>銘柄名</th>
+                        <th>連続日数</th>
+                        <th>株価</th>
+                        <th>前日比</th>
+                    </tr>
+                </thead>
+                <tbody id="stockTableBody">
+                    <tr><td colspan="5" style="text-align:center;">データを読み込んでいます...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="swipe-hint">👈 画面を左右にスワイプしてページをめくれます 👉</div>
+
+    <script>
+        let currentDate = new Date();
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        // 元データが存在するリポジトリのURL指定
+        const BASE_DATA_URL = 'https://raw.githubusercontent.com/tattoo4497-netizen/japan-ath-tracker/main';
+
+        function formatDate(d) {
+            return d.toISOString().split('T')[0];
+        }
+
+        async function loadDataForDate(dateStr) {
+            const tbody = document.getElementById('stockTableBody');
+            const display = document.getElementById('dateDisplay');
+            const summary = document.getElementById('summaryText');
+            
+            display.textContent = dateStr;
+            summary.textContent = "読み込み中...";
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">読み込み中...</td></tr>';
+
+            const todayStr = formatDate(new Date());
+            const fileUrl = (dateStr === todayStr) 
+                ? `${BASE_DATA_URL}/ath_data.json?v=${new Date().getTime()}` 
+                : `${BASE_DATA_URL}/history/${dateStr}.json`;
+
+            try {
+                const response = await fetch(fileUrl);
+                if (!response.ok) throw new Error("記録なし");
+                
+                const data = await response.json();
+                const stocks = Object.entries(data.stocks || {}).map(([code, info]) => ({ code, ...info }));
+                stocks.sort((a, b) => b.consecutive_days - a.consecutive_days || b.change - a.change);
+
+                summary.textContent = `記録銘柄: ${stocks.length} 件`;
+                tbody.innerHTML = '';
+
+                if (stocks.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">この日の高値更新記録はありません</td></tr>';
+                    return;
+                }
+
+                stocks.forEach(stock => {
+                    const tr = document.createElement('tr');
+                    const changeClass = stock.change > 0 ? 'up' : (stock.change < 0 ? 'down' : '');
+                    const changeSign = stock.change > 0 ? '+' : '';
+                    
+                    tr.innerHTML = `
+                        <td><b>${stock.code}</b></td>
+                        <td>${stock.name}</td>
+                        <td><span class="badge">${stock.consecutive_days}日連続 🔥</span></td>
+                        <td>¥${stock.price ? stock.price.toLocaleString() : '-'}</td>
+                        <td class="${changeClass}">${changeSign}${stock.change}%</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+            } catch (err) {
+                summary.textContent = "記録なし";
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#8a8d9b;">この日の記録はありません</td></tr>';
+            }
+        }
+
+        function changeDate(days) {
+            currentDate.setDate(currentDate.getDate() + days);
+            loadDataForDate(formatDate(currentDate));
+        }
+
+        function loadToday() {
+            currentDate = new Date();
+            loadDataForDate(formatDate(currentDate));
+        }
+
+        function onDateSelected(val) {
+            if (!val) return;
+            currentDate = new Date(val);
+            loadDataForDate(val);
+        }
+
+        // 左右スワイプ操作
+        const container = document.getElementById('pageContainer');
+        container.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; }, false);
+        container.addEventListener('touchend', e => {
+            touchEndX = e.changedTouches[0].screenX;
+            if (touchStartX - touchEndX > 50) changeDate(1);  // 左スワイプで翌日
+            if (touchEndX - touchStartX > 50) changeDate(-1); // 右スワイプで前日
+        }, false);
+
+        loadToday();
+    </script>
+</body>
+</html>
