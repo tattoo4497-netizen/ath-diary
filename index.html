@@ -20,6 +20,10 @@
             margin-bottom: 12px;
         }
         h1 { font-size: 1.1rem; margin: 0; color: #fff; }
+        .header-actions {
+            display: flex;
+            gap: 6px;
+        }
         
         /* 日めくりナビゲーション */
         .date-card {
@@ -37,13 +41,18 @@
             background: #2563eb;
             color: #fff;
             border: none;
-            padding: 10px 16px;
+            padding: 8px 12px;
             border-radius: 8px;
             font-weight: bold;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
             cursor: pointer;
         }
         .nav-btn:active { background: #1d4ed8; }
+        .refresh-btn {
+            background: #374151;
+            color: #38bdf8;
+            border: 1px solid #4b5563;
+        }
         .date-display {
             font-size: 1.1rem;
             font-weight: bold;
@@ -55,6 +64,7 @@
             font-size: 0.75rem;
             color: #8a8d9b;
             text-align: center;
+            margin-top: 2px;
         }
 
         /* 銘柄リストコンテナ */
@@ -96,7 +106,10 @@
 
     <div class="header">
         <h1>📖 ATH 日めくり記録帳</h1>
-        <button class="nav-btn" onclick="loadToday()">今日</button>
+        <div class="header-actions">
+            <button class="nav-btn refresh-btn" onclick="refreshData()">🔄 更新</button>
+            <button class="nav-btn" onclick="loadToday()">今日</button>
+        </div>
     </div>
 
     <!-- 日付めくりナビゲーション -->
@@ -105,6 +118,7 @@
         <div>
             <div class="date-display" id="dateDisplay" onclick="document.getElementById('dateInput').click()">----/--/--</div>
             <div class="date-subtext" id="summaryText">読み込み中...</div>
+            <div class="date-subtext" id="updatedTimeText" style="color: #38bdf8;"></div>
             <input type="date" id="dateInput" style="display:none;" onchange="onDateSelected(this.value)">
         </div>
         <button class="nav-btn" onclick="changeDate(1)">翌日 ▶</button>
@@ -138,19 +152,24 @@
             return d.toISOString().split('T')[0];
         }
 
-        async function loadDataForDate(dateStr) {
+        async function loadDataForDate(dateStr, forceRefresh = false) {
             const tbody = document.getElementById('stockTableBody');
             const display = document.getElementById('dateDisplay');
             const summary = document.getElementById('summaryText');
+            const updatedTimeDisplay = document.getElementById('updatedTimeText');
             
             display.textContent = dateStr;
             summary.textContent = "読み込み中...";
+            updatedTimeDisplay.textContent = "";
             tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">読み込み中...</td></tr>';
 
+            const cacheKey = forceRefresh ? `?v=${new Date().getTime()}` : `?v=${new Date().getMinutes()}`;
+            
+            // 日付ごとのJSON（または最新のath_data.json）を参照
             const todayStr = formatDate(new Date());
             const fileUrl = (dateStr === todayStr) 
-                ? `${BASE_DATA_URL}/ath_data.json?v=${new Date().getTime()}` 
-                : `${BASE_DATA_URL}/history/${dateStr}.json`;
+                ? `${BASE_DATA_URL}/ath_data.json${cacheKey}` 
+                : `${BASE_DATA_URL}/history/${dateStr}.json${cacheKey}`;
 
             try {
                 const response = await fetch(fileUrl);
@@ -161,10 +180,20 @@
                 stocks.sort((a, b) => b.consecutive_days - a.consecutive_days || b.change - a.change);
 
                 summary.textContent = `記録銘柄: ${stocks.length} 件`;
+                
+                // 時間データがあれば時刻、なければ日付を表示
+                if (data.last_updated_time) {
+                    updatedTimeDisplay.textContent = `⏰ 最終更新: ${data.last_updated_time}`;
+                } else if (data.last_updated) {
+                    updatedTimeDisplay.textContent = `⏰ 最終更新日: ${data.last_updated}`;
+                } else {
+                    updatedTimeDisplay.textContent = "";
+                }
+
                 tbody.innerHTML = '';
 
                 if (stocks.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">この日の高値更新記録はありません</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">この日の高値更新記録はありません（休場または取引前）</td></tr>';
                     return;
                 }
 
@@ -185,6 +214,7 @@
 
             } catch (err) {
                 summary.textContent = "記録なし";
+                updatedTimeDisplay.textContent = "";
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#8a8d9b;">この日の記録はありません</td></tr>';
             }
         }
@@ -197,6 +227,10 @@
         function loadToday() {
             currentDate = new Date();
             loadDataForDate(formatDate(currentDate));
+        }
+
+        function refreshData() {
+            loadDataForDate(formatDate(currentDate), true);
         }
 
         function onDateSelected(val) {
