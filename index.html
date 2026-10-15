@@ -3,244 +3,163 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ATH株 日めくり記録帳</title>
+    <title>ATH日めくり記録帳</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        * { box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: #0f111a;
-            color: #e1e3ea;
-            margin: 0;
-            padding: 12px;
-        }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-        h1 { font-size: 1.1rem; margin: 0; color: #fff; }
-        .header-actions {
-            display: flex;
-            gap: 6px;
-        }
-        
-        /* 日めくりナビゲーション */
-        .date-card {
-            background: #1a1d2e;
-            border-radius: 12px;
-            padding: 10px 15px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-            margin-bottom: 12px;
-            border: 1px solid #2a2e45;
-        }
-        .nav-btn {
-            background: #2563eb;
-            color: #fff;
-            border: none;
-            padding: 8px 12px;
-            border-radius: 8px;
-            font-weight: bold;
-            font-size: 0.9rem;
-            cursor: pointer;
-        }
-        .nav-btn:active { background: #1d4ed8; }
-        .refresh-btn {
-            background: #374151;
-            color: #38bdf8;
-            border: 1px solid #4b5563;
-        }
-        .date-display {
-            font-size: 1.1rem;
-            font-weight: bold;
-            color: #38bdf8;
-            text-align: center;
-            cursor: pointer;
-        }
-        .date-subtext {
-            font-size: 0.75rem;
-            color: #8a8d9b;
-            text-align: center;
-            margin-top: 2px;
-        }
-
-        /* 銘柄リストコンテナ */
-        .page-container {
-            min-height: 50vh;
-        }
-        .table-container {
-            overflow-x: auto;
-            background: #1a1d2e;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-            border: 1px solid #25283b;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.85rem;
-            text-align: left;
-        }
-        th, td {
-            padding: 12px 10px;
-            border-bottom: 1px solid #25283b;
-            white-space: nowrap;
-        }
-        th { background-color: #222638; color: #9da1b0; }
-        .badge {
-            background: #2563eb;
-            color: #fff;
-            font-weight: bold;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 0.75rem;
-        }
-        .up { color: #22c55e; }
-        .down { color: #ef4444; }
+        body { background-color: #0f172a; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        .table-header { background-color: #1e293b; position: sticky; top: 0; z-index: 10; }
     </style>
 </head>
-<body>
+<body class="min-h-screen flex flex-col">
 
-    <div class="header">
-        <h1>📖 ATH 日めくり記録帳</h1>
-        <div class="header-actions">
-            <button class="nav-btn refresh-btn" onclick="refreshData()">🔄 更新</button>
-            <button class="nav-btn" onclick="loadToday()">今日</button>
+    <!-- ヘッダー -->
+    <header class="bg-slate-900 border-b border-slate-800 p-3 sticky top-0 z-20 shadow-md">
+        <div class="max-w-4xl mx-auto flex justify-between items-center">
+            <h1 class="text-base font-bold text-cyan-400">📊 ATH日めくり記録帳</h1>
+            <div class="flex items-center space-x-2">
+                <button onclick="manualRefresh()" id="refresh-btn" class="bg-slate-800 hover:bg-slate-700 text-xs px-3 py-1.5 rounded border border-slate-700 transition flex items-center space-x-1">
+                    <span>🔄 更新</span>
+                </button>
+                <button onclick="goToToday()" class="bg-cyan-600 hover:bg-cyan-500 text-xs px-3 py-1.5 rounded font-medium transition">
+                    今日
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 日付コントロールバー -->
+    <div class="bg-slate-900/80 backdrop-blur border-b border-slate-800 py-2 px-4 sticky top-[49px] z-10">
+        <div class="max-w-4xl mx-auto flex justify-between items-center">
+            <button onclick="changeDate(-1)" class="bg-slate-800 hover:bg-slate-700 text-xs px-3 py-1.5 rounded border border-slate-700 font-medium flex items-center space-x-1">
+                <span>◀ 前日</span>
+            </button>
+            <div class="text-center">
+                <span id="current-date-display" class="text-sm font-bold tracking-wide text-slate-100">----/--/--</span>
+                <div class="text-[10px] text-slate-400 flex justify-center space-x-2">
+                    <span id="record-count">記録銘柄: 0 件</span>
+                    <span id="last-updated-time">最終更新: --:--</span>
+                </div>
+            </div>
+            <button onclick="changeDate(1)" class="bg-slate-800 hover:bg-slate-700 text-xs px-3 py-1.5 rounded border border-slate-700 font-medium flex items-center space-x-1">
+                <span>翌日 ▶</span>
+            </button>
         </div>
     </div>
 
-    <!-- 日付めくりナビゲーション -->
-    <div class="date-card">
-        <button class="nav-btn" onclick="changeDate(-1)">◀ 前日</button>
-        <div>
-            <div class="date-display" id="dateDisplay" onclick="document.getElementById('dateInput').click()">----/--/--</div>
-            <div class="date-subtext" id="summaryText">読み込み中...</div>
-            <div class="date-subtext" id="updatedTimeText" style="color: #38bdf8;"></div>
-            <input type="date" id="dateInput" style="display:none;" onchange="onDateSelected(this.value)">
+    <!-- メインコンテンツ -->
+    <main class="flex-1 max-w-4xl w-full mx-auto p-2 pb-12">
+        <div class="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden shadow-xl">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="table-header text-slate-400 border-b border-slate-800 text-[11px]">
+                            <th class="p-2.5 font-medium">コード</th>
+                            <th class="p-2.5 font-medium">銘柄名</th>
+                            <th class="p-2.5 font-medium text-center">連続日数</th>
+                            <th class="p-2.5 font-medium text-right">株価</th>
+                            <th class="p-2.5 font-medium text-right">前日比</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stock-table-body" class="divide-y divide-slate-800/60">
+                        <tr>
+                            <td colspan="5" class="text-center py-8 text-slate-500">データを読み込んでいます...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
-        <button class="nav-btn" onclick="changeDate(1)">翌日 ▶</button>
-    </div>
-
-    <!-- メイン表示エリア -->
-    <div class="page-container" id="pageContainer">
-        <div class="table-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th>コード</th>
-                        <th>銘柄名</th>
-                        <th>連続日数</th>
-                        <th>株価</th>
-                        <th>前日比</th>
-                    </tr>
-                </thead>
-                <tbody id="stockTableBody">
-                    <tr><td colspan="5" style="text-align:center;">データを読み込んでいます...</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
+    </main>
 
     <script>
-        let currentDate = new Date();
-        const BASE_DATA_URL = 'https://raw.githubusercontent.com/tattoo4497-netizen/japan-ath-tracker/main';
+        let currentDate = new Date().toISOString().split('T')[0];
 
-        function formatDate(d) {
-            return d.toISOString().split('T')[0];
+        // 日付変更ボタン
+        function changeDate(days) {
+            let d = new Date(currentDate);
+            d.setDate(d.getDate() + days);
+            currentDate = d.toISOString().split('T')[0];
+            loadData(currentDate);
         }
 
-        async function loadDataForDate(dateStr, forceRefresh = false) {
-            const tbody = document.getElementById('stockTableBody');
-            const display = document.getElementById('dateDisplay');
-            const summary = document.getElementById('summaryText');
-            const updatedTimeDisplay = document.getElementById('updatedTimeText');
-            
-            display.textContent = dateStr;
-            summary.textContent = "読み込み中...";
-            updatedTimeDisplay.textContent = "";
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">読み込み中...</td></tr>';
+        function goToToday() {
+            currentDate = new Date().toISOString().split('T')[0];
+            loadData(currentDate);
+        }
 
-            const cacheKey = forceRefresh ? `?v=${new Date().getTime()}` : `?v=${new Date().getMinutes()}`;
+        // 手動更新（最新のath_data.jsonを強制取得して今日の日付に反映）
+        function manualRefresh() {
+            goToToday();
+        }
+
+        // データのロード（キャッシュを残さない設定: cache: 'no-store'）
+        async function loadData(dateStr) {
+            document.getElementById('current-date-display').innerText = dateStr;
+            const todayStr = new Date().toISOString().split('T')[0];
             
-            // 日付ごとのJSON（または最新のath_data.json）を参照
-            const todayStr = formatDate(new Date());
-            const fileUrl = (dateStr === todayStr) 
-                ? `${BASE_DATA_URL}/ath_data.json${cacheKey}` 
-                : `${BASE_DATA_URL}/history/${dateStr}.json${cacheKey}`;
+            // 本日の場合はルートの ath_data.json、過去日の場合は history/YYYY-MM-DD.json を読み込む
+            let fileUrl = (dateStr === todayStr) ? 'ath_data.json' : `history/${dateStr}.json`;
 
             try {
-                const response = await fetch(fileUrl);
-                if (!response.ok) throw new Error("記録なし");
-                
+                const response = await fetch(fileUrl + '?t=' + new Date().getTime(), { cache: 'no-store' });
+                if (!response.ok) {
+                    throw new Error("データがありません");
+                }
                 const data = await response.json();
-                const stocks = Object.entries(data.stocks || {}).map(([code, info]) => ({ code, ...info }));
-                stocks.sort((a, b) => b.consecutive_days - a.consecutive_days || b.change - a.change);
-
-                summary.textContent = `記録銘柄: ${stocks.length} 件`;
-                
-                // 時間データがあれば時刻、なければ日付を表示
-                if (data.last_updated_time) {
-                    updatedTimeDisplay.textContent = `⏰ 最終更新: ${data.last_updated_time}`;
-                } else if (data.last_updated) {
-                    updatedTimeDisplay.textContent = `⏰ 最終更新日: ${data.last_updated}`;
-                } else {
-                    updatedTimeDisplay.textContent = "";
-                }
-
-                tbody.innerHTML = '';
-
-                if (stocks.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">この日の高値更新記録はありません（休場または取引前）</td></tr>';
-                    return;
-                }
-
-                stocks.forEach(stock => {
-                    const tr = document.createElement('tr');
-                    const changeClass = stock.change > 0 ? 'up' : (stock.change < 0 ? 'down' : '');
-                    const changeSign = stock.change > 0 ? '+' : '';
-                    
-                    tr.innerHTML = `
-                        <td><b>${stock.code}</b></td>
-                        <td>${stock.name}</td>
-                        <td><span class="badge">${stock.consecutive_days}日連続 🔥</span></td>
-                        <td>¥${stock.price ? stock.price.toLocaleString() : '-'}</td>
-                        <td class="${changeClass}">${changeSign}${stock.change}%</td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-
-            } catch (err) {
-                summary.textContent = "記録なし";
-                updatedTimeDisplay.textContent = "";
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#8a8d9b;">この日の記録はありません</td></tr>';
+                renderTable(data);
+            } catch (error) {
+                document.getElementById('stock-table-body').innerHTML = `
+                    <tr><td colspan="5" class="text-center py-12 text-slate-500">
+                        ${dateStr} の記録はありません
+                    </td></tr>`;
+                document.getElementById('record-count').innerText = "記録銘柄: 0 件";
+                document.getElementById('last-updated-time').innerText = "最終更新: --:--";
             }
         }
 
-        function changeDate(days) {
-            currentDate.setDate(currentDate.getDate() + days);
-            loadDataForDate(formatDate(currentDate));
+        // テーブルの描画
+        function renderTable(data) {
+            const tbody = document.getElementById('stock-table-body');
+            tbody.innerHTML = '';
+
+            const stocks = data.stocks || {};
+            const stockKeys = Object.keys(stocks);
+
+            document.getElementById('record-count').innerText = `記録銘柄: ${stockKeys.length} 件`;
+            document.getElementById('last-updated-time').innerText = `最終更新: ${data.last_updated_time || '--:--'}`;
+
+            if (stockKeys.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-12 text-slate-500">該当する銘柄はありません</td></tr>`;
+                return;
+            }
+
+            // 前日比の高い順にソート
+            const sortedKeys = stockKeys.sort((a, b) => stocks[b].change - stocks[a].change);
+
+            sortedKeys.forEach(code => {
+                const s = stocks[code];
+                const changeClass = s.change >= 0 ? 'text-red-400 font-medium' : 'text-blue-400 font-medium';
+                const changeSign = s.change > 0 ? '+' : '';
+                
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-800/40 transition';
+                tr.innerHTML = `
+                    <td class="p-2.5 font-mono text-slate-300 font-semibold">${code}</td>
+                    <td class="p-2.5 font-medium text-slate-100 max-w-[140px] truncate" title="${s.name}">${s.name}</td>
+                    <td class="p-2.5 text-center">
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                            ${s.consecutive_days || 1}日連続 🔥
+                        </span>
+                    </td>
+                    <td class="p-2.5 text-right font-mono text-slate-200">¥${s.price.toLocaleString()}</td>
+                    <td class="p-2.5 text-right font-mono ${changeClass}">${changeSign}${s.change}%</td>
+                `;
+                tbody.appendChild(tr);
+            });
         }
 
-        function loadToday() {
-            currentDate = new Date();
-            loadDataForDate(formatDate(currentDate));
-        }
-
-        function refreshData() {
-            loadDataForDate(formatDate(currentDate), true);
-        }
-
-        function onDateSelected(val) {
-            if (!val) return;
-            currentDate = new Date(val);
-            loadDataForDate(val);
-        }
-
-        // 初期表示
-        loadToday();
+        // 初期ロード
+        loadData(currentDate);
     </script>
 </body>
 </html>
